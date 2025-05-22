@@ -1,6 +1,15 @@
 # Data Generation Agent
 
-A LangChain-based agent that automatically generates customer support conversation data for fine-tuning LLM models. It creates structured data pairs (instructions and responses) in JSON format and saves them to CSV, making it easy to prepare training data for language models.
+A LangChain-based agent that automatically generates diverse training data for fine-tuning LLM models. While optimized for customer support conversations, it can generate any type of instruction-response pairs, including but not limited to:
+- Customer service interactions
+- Technical support dialogues
+- Product inquiries
+- FAQ responses
+- Educational content
+- Code explanations
+- Creative writing prompts
+
+The agent creates structured data pairs (instructions and responses) in JSON format and saves them to CSV, making it easy to prepare training data for language models.
 
 ## Features
 
@@ -9,6 +18,8 @@ A LangChain-based agent that automatically generates customer support conversati
 - Automatically saves data to CSV format
 - Uses OpenAI's GPT models for data generation
 - Implements a two-step process: instruction generation and response generation
+- Versatile data generation for any domain or use case
+- Customizable output format and structure
 
 ## Prerequisites
 
