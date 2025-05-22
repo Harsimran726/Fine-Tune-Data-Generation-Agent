@@ -45,7 +45,7 @@ Your output should be presented in a **table format** with two columns:
 Note:- 
 -> You are Data Generation Agent, that only generate data to fine tune the LLM.
 -> To fine tune the data we need only - Instructions and Response.
--> Output should be in JSON format.
+-> Be carefull only provide output in Json Format.
 -> After generating the data, you need to save the data to a csv file for that use the {{csv_tool}}.
 """
 
@@ -86,43 +86,55 @@ Instructions:
 
 
 def generate_data(query : str) -> str:
-    query_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.8)
-    query_prompt = ChatPromptTemplate.from_messages([
-        ("system", query_system_prompt),
-        ("human", "{input}"),
-        ("assistant", "{agent_scratchpad}"), 
-
-    ])
-    # print(f"Here is the query: {query} in the generate_data function")
-    chain: Runnable = query_prompt | query_llm
-    result = chain.invoke({"input": query,"agent_scratchpad": ""})
-    # print(f"Here is the result: {result} in the generate_data function")
-    return result
+    try:
+        query_llm = ChatOpenAI(model="gpt-4", temperature=0.8)
+        query_prompt = ChatPromptTemplate.from_messages([
+            ("system", query_system_prompt),
+            ("human", "{input}"),
+            ("assistant", "{agent_scratchpad}"), 
+        ])
+        chain: Runnable = query_prompt | query_llm
+        result = chain.invoke({"input": query, "agent_scratchpad": ""})
+        return result
+    except Exception as e:
+        print(f"Error in generate_data: {str(e)}")
+        raise
 
 def generate_response(instructions : str) -> str:
-    response_llm = ChatOpenAI(model="gpt-4o-mini",temperature=0.8)
-    response_prompt = ChatPromptTemplate.from_messages([
-        ("system", response_system_prompt),
-        ("human", "{instructions}"),
-       ("assistant", "{agent_scratchpad}"), 
+    try:
+        response_llm = ChatOpenAI(model="gpt-4", temperature=0.8)
+        response_prompt = ChatPromptTemplate.from_messages([
+            ("system", response_system_prompt),
+            ("human", "{instructions}"),
+            ("assistant", "{agent_scratchpad}"), 
+        ])
+        chain: Runnable = response_prompt | response_llm
+        result = chain.invoke({"instructions": instructions, "agent_scratchpad": ""})
+        return result
+    except Exception as e:
+        print(f"Error in generate_response: {str(e)}")
+        raise
+
+def save_to_csv(data: str):
+    try:
+        print(f"Processing data for CSV: {data}")
+        # Parse the JSON string into a Python dictionary
+        data_dict = json.loads(data)
         
-    ])
-    # print(f"Here is the instructions: {instructions} in the generate_response function")
-    chain: Runnable = response_prompt | response_llm
-    # print(f"Here is the instructions: {instructions} in the generate_response function")
-    result  = chain.invoke({"instructions": instructions,"agent_scratchpad": ""})
-    return result
-query_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.8)
-
-
-
-def save_to_csv(data : str):
-
-    data = json.loads(data)
-    df = pd.DataFrame(data)
-    df.to_csv("data.csv", index=False)
-    return "Data saved to csv file"
-
+        # Convert the dictionary to a DataFrame
+        df = pd.DataFrame([data_dict])
+        
+        # Save to CSV without index
+        df.to_csv("data.csv", index=False)
+        print("Data successfully saved to CSV")
+        
+        return "Data saved to csv file"
+    except json.JSONDecodeError as e:
+        print(f"JSON decode error: {str(e)}")
+        raise ValueError(f"Invalid JSON data: {str(e)}")
+    except Exception as e:
+        print(f"Error saving to CSV: {str(e)}")
+        raise
 
 
 generate_data_tool =    Tool(
@@ -154,16 +166,42 @@ query_prompt = ChatPromptTemplate.from_messages([
     MessagesPlaceholder(variable_name="agent_scratchpad")
 ])
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.8)
+llm = ChatOpenAI(model="gpt-4", temperature=0.8)
 
 agent = create_openai_functions_agent(llm=llm,prompt = query_prompt, tools=tools)
 data_agent = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 
-query = input("Enter the query: ")
-if query:
-    data_agent.invoke({"input": query})
-    print(f"Here is the result: {data_agent} in the generate_data function")
+def generate_data_agent(query: str):
+    try:
+        if not query:
+            return {"status": "error", "message": "Query cannot be empty", "csv_file": None}
+            
+        print(f"Processing query: {query}")
+        result = data_agent.invoke({"input": query})
+        print(f"Agent execution result: {result}")
+        
+        # Check if data.csv was created
+        if os.path.exists("data.csv"):
+            return {
+                "status": "success",
+                "message": "Data generated successfully! You can download the CSV file below.",
+                "csv_file": "data.csv"
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to generate data file",
+                "csv_file": None
+            }
+    except Exception as e:
+        print(f"Error in generate_data_agent: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"An error occurred: {str(e)}",
+            "csv_file": None
+        }
+
 
 
 
