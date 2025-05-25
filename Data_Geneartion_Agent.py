@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt  
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.agents import AgentExecutor, create_react_agent , BaseMultiActionAgent , initialize_agent, AgentType , create_openai_tools_agent , create_openai_functions_agent
+from langchain.agents import AgentExecutor, create_react_agent , BaseMultiActionAgent , initialize_agent, AgentType , create_openai_tools_agent , create_openai_functions_agent , create_tool_calling_agent
 from langchain.tools import Tool
 import json
 from dotenv import load_dotenv
@@ -19,75 +19,68 @@ import os
 openai_api_key = os.getenv("OPENAI_API_KEY")
 
 system_prompt = """
-You are a Data Generation Agent tasked with generating structured data based on a user query for Fine tuning the model.
+You are a Synthetic Data Generation Agent responsible for producing structured conversational data suitable for fine-tuning a language model.
 
-Follow these steps:
-1. Understand the user's query and identify the type of data needed.
-2. Generate clear, natural language **instructions** for generating the data.
-3. Use the available tools to generate the actual **data response** based on those instructions.
-4. Return the final output in JSON format with **two keys**: "instructions" and "response".
+Your task follows this pipeline:
+1. **Understand the user's request** to determine the data domain and format.
+2. **Generate a diverse list of realistic user instructions** related to the request topic.
+3. **Create corresponding assistant responses** that are helpful, natural, and suitable for fine-tuning dialogue-based models.
+4. **Return the output in JSON format** using two keys only:
+   - `"instructions"`: An array of user queries or prompts.
+   - `"response"`: An array of assistant replies corresponding to each instruction.
 
-Available tools:
-- generate_data: {{generate_data_tool}}
-- generate_response: {{generate_response_tool}}
+### Output format:
+Return the final output in this JSON format:
+```json
+{{
+  "instructions": ["<user prompt 1>", "<user prompt 2>", "..."],
+  "response": ["<assistant response 1>", "<assistant response 2>", "..."]
+}}
 
-Your output should be presented in a **table format** with two columns:
-- Instructions
-- Response
-
--> User -- Provide me amx customer support data atleast 100 rows 
--> Model -- '{{
-    "instructions": ["I have problem my account"","I can't retrive my bank balance "],
-    "response": ["Thank you for contacting us. We will look into it.","Please provide your account number and Name"]
-}}'
-
-
-Note:- 
--> You are Data Generation Agent, that only generate data to fine tune the LLM.
--> To fine tune the data we need only - Instructions and Response.
--> Be carefull only provide output in Json Format.
--> After generating the data, you need to save the data to a csv file for that use the {{csv_tool}}.
+-- Pass the JSON format data (output) to '{{csv_tool}}' to convert json data into Csv file.
 """
 
 
-query_system_prompt = """
-You are a Data Generation Agent that generates **instructions** for generating Fine Tuning data based on a user query.
+query_system_prompt = """You are a **Data Generation Agent** that produces **natural language instructions** to guide the creation of fine-tuning datasets based on a user request.
 
-Follow these steps:
-1. Understand the user's query and what type of data is needed.
-2. Generate a single key called `"instructions"` that contains clear, natural language instructions for generating the data.
-3. If the number of rows is not specified, assume 1000 rows.
-4. Return only a JSON string like: {{"instructions": "Generate 1000 rows of employee salary data based on..."}}
+### Your Task:
+1. Understand the user's input and determine the type and topic of data required.
+2. Based on the input, generate a **single, clear instruction** for creating a dataset. The instruction should describe what kind of data to generate, in natural and concise language.
+3. If the number of rows is not explicitly mentioned, default to **1000 rows**.
+4. **Only return a string** with one key: `"instructions"`.
 
-Requirements:
-- Instructions must be short, natural, and easy to follow.
-- Do NOT return actual data — only the instruction.
+---
 
-Input:
-{input}
+### Output Format:
+
+  "instructions": "Generate 1000 rows of employee salary data based on..."
+
+
 """
 response_system_prompt = """
-You are a Data Generation Agent that generates **data (response)** based on provided instructions.
+You are a **Data Generation Agent** responsible for generating **structured data responses** based on the given instructions.
 
-Follow these steps:
-1. Read the instructions carefully.
-2. Generate a single key `"response"` that contains the final data output or description.
-3. Return only a JSON string like: {{"response": "Here is the data..."}}
+---
 
-Requirements:
-- Make sure the response strictly follows the instructions.
-- Keep the response concise and structured.
+### Your Task:
+1. Read and understand the provided **instructions**.
+2. Generate the appropriate **data or description** that directly fulfills the instructions.
+3. Return only a **JSON string** with one key: `"response"`.
+
+---
+
+### Output Format:
+
+  "response": "Here is the data..."
 
 
-Instructions:
-{instructions}
 """
 
 
 
 def generate_data(query : str) -> str:
     try:
-        query_llm = ChatOpenAI(model="gpt-4", temperature=0.8)
+        query_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.8)
         query_prompt = ChatPromptTemplate.from_messages([
             ("system", query_system_prompt),
             ("human", "{input}"),
@@ -102,7 +95,7 @@ def generate_data(query : str) -> str:
 
 def generate_response(instructions : str) -> str:
     try:
-        response_llm = ChatOpenAI(model="gpt-4", temperature=0.8)
+        response_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.8)
         response_prompt = ChatPromptTemplate.from_messages([
             ("system", response_system_prompt),
             ("human", "{instructions}"),
@@ -116,16 +109,20 @@ def generate_response(instructions : str) -> str:
         raise
 
 def save_to_csv(data: str):
+    print(f"INside the save_to_csv")
     try:
         print(f"Processing data for CSV: {data}")
         # Parse the JSON string into a Python dictionary
         data_dict = json.loads(data)
+
         
         # Convert the dictionary to a DataFrame
-        df = pd.DataFrame([data_dict])
+        df = pd.DataFrame()
+        df['instructions'] = data_dict['instructions']
+        df['response'] = data_dict['response']
         
         # Save to CSV without index
-        df.to_csv("data.csv", index=False)
+        df.to_csv("{query}.csv", index=False)
         print("Data successfully saved to CSV")
         
         return "Data saved to csv file"
@@ -168,7 +165,7 @@ query_prompt = ChatPromptTemplate.from_messages([
 
 llm = ChatOpenAI(model="gpt-4", temperature=0.8)
 
-agent = create_openai_functions_agent(llm=llm,prompt = query_prompt, tools=tools)
+agent = create_tool_calling_agent(llm=llm,prompt = query_prompt, tools=tools)
 data_agent = AgentExecutor(agent=agent, tools=tools, verbose=True)
 
 
@@ -179,13 +176,13 @@ def generate_data_agent(query: str):
             
         print(f"Processing query: {query}")
         result = data_agent.invoke({"input": query})
-        print(f"Agent execution result: {result}")
+        print(f"Agent execution result: {result['output']}")
         
         # Check if data.csv was created
         if os.path.exists("data.csv"):
             return {
                 "status": "success",
-                "message": "Data generated successfully! You can download the CSV file below.",
+                "message": "ated successfully! You can download the CSV file below.",
                 "csv_file": "data.csv"
             }
         else:
