@@ -9,6 +9,9 @@ A LangChain-based agent that automatically generates diverse training data for f
 - Code explanations
 - Creative writing prompts
 
+![Alt text](Screenshot 2025-05-25 222445.png)
+
+
 The agent creates structured data pairs (instructions and responses) in JSON format and saves them to CSV, making it easy to prepare training data for language models.
 
 ## Features
