@@ -11,6 +11,7 @@ A LangChain-based agent that automatically generates diverse training data for f
 
 ![](image1.png)
 
+![](image2.png)
 
 The agent creates structured data pairs (instructions and responses) in JSON format and saves them to CSV, making it easy to prepare training data for language models.
 
